@@ -5,8 +5,8 @@ Implements the legacy OOK modulation Energnie protocol.
 
 import logging
 import time
-import rfm69
-from registers import *
+from . import rfm69
+from .registers import *
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -184,12 +184,11 @@ def main():
     rfm69.shutdown()
 
 
-
-
 if __name__ == '__main__':
     try:
         main()
-
-    except KeyboardInterrupt:
-        rfm69.shutdown()
+    except:
         pass
+    finally:
+        logger.info("Tidying up")
+        rfm69.shutdown()

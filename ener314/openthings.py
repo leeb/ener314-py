@@ -6,9 +6,9 @@ Implements the OpenThings FSK modulation used by Energenie MiHome devices
 import logging
 import time
 import random
-import rfm69
-from registers import *
-from openthings_params import *
+from . import rfm69
+from .registers import *
+from .openthings_params import *
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)

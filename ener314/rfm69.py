@@ -4,8 +4,8 @@ import logging
 import RPi.GPIO as GPIO
 import spidev
 import time
-from registers import *
-from openthings_params import *
+from . registers import *
+from . openthings_params import *
 
 GPIO_GRN_LED = 27   # Pin 13
 GPIO_RED_LED = 22   # Pin 15
@@ -44,7 +44,7 @@ def initialize():
 
 
 def shutdown():
-    set_mode_sleep()
+    set_mode_tx()
     spi.close()
     GPIO.cleanup()
 
@@ -183,9 +183,6 @@ def red_led(state):
         GPIO.output(GPIO_RED_LED, GPIO.HIGH)
     else:
         GPIO.output(GPIO_RED_LED, GPIO.LOW)
-
-
-
 
 
 

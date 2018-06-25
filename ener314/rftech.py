@@ -2,11 +2,11 @@
 '''
 Receives signals from RFtech temperature sensor
 '''
-
+import ener314
 import logging
 import time
-import rfm69
-from registers import *
+from . import rfm69
+from . registers import *
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
