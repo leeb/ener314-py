@@ -6,7 +6,7 @@ import ener314
 import logging
 import time
 from . import rfm69
-from . registers import *
+from .registers import *
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -111,30 +111,3 @@ def mode_rftech_receive():
 
     rfm69.wait_for(REG_IRQFLAGS1, RF_IRQFLAGS1_MODEREADY, True)
     logger.info('RFM69 Ready')
-
-def listen_test():
-    mode_rftech_receive()
-    logger.info('In RFTech listen test')
-
-    while 1:
-        if rfm69.is_payload_ready():
-            pkt = RftechPacket.decode(rfm69.read_fifo())
-            if pkt:
-                print(pkt)
-
-def main():
-    logger.info("Starting up RFTech")
-    rfm69.initialize()
-    listen_test()
-    rfm69.shutdown()
-
-
-if __name__ == '__main__':
-    try:
-        main()
-
-    except KeyboardInterrupt:
-        rfm69.shutdown()
-        pass
-
-

@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 '''
 Implements OOK protocol from mystery tesco adapter
+based on EM78P153S controller
+Model number: REMSOC2-TD
+
 
 Devices have a 16 bit address
 Bits 4-7 of state address adapters
@@ -17,9 +20,9 @@ High nibble of state addresses the individual
 
 import logging
 import time
-import rfm69
 import random
-from registers import *
+from . import rfm69
+from .registers import *
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -37,7 +40,62 @@ class TescoPacket(object):
         self.state = state
 
     def __str__(self):
-        return "Address: {:05X} State: {:01X}".format(self.addr, self.state)
+        return "Address: {:04X} State: {:01X}".format(self.addr, self.state)
+
+
+    @classmethod
+    def decode(cls, data):
+        # logger.info('raw input {}'.format(data))
+        out = []
+        dst_mask = 0x01
+        length = 0
+        state = 1
+        trim = 25
+        bits = 0
+
+        for v in data:
+            src_mask = 0x80
+            while src_mask and bits < 40:
+                if v & src_mask:
+                    if state:
+                        length +=1
+                    else:
+                        if trim:
+                            trim -= 1
+                        else:
+                            bits += 1
+                            dst_mask >>= 1
+                            if dst_mask == 0:
+                                dst_mask = 0x80
+                                out.append(0x0)
+                            if length > 3:
+                                out[-1] |= dst_mask
+                        state = 1
+                        length = 1
+
+                else:
+                    if state:
+                        length = 1
+                        state = 0
+                    else:
+                        length += 1
+                src_mask >>= 1
+
+        # trivial validation
+        if bits != 40:
+            return False
+
+        crc = 0xff & (out[0] + out[1] + out[2] + out[3])
+        if out[4] != crc:
+            return False
+
+        #logger.info('Bits {} result {}'.format(bits, out))
+
+        addr = (out[0] << 8) + out[1]
+        return cls(addr, out[3])
+
+
+
 
     def encode(self):
         data = [
@@ -53,7 +111,7 @@ class TescoPacket(object):
 
 
         # sync pattern (8 bytes)
-        out = [ 0xC0, 0, 0, 0, 0, 0, 0x3F, 0xFF ]
+        out = [ 0xC0, 0, 0, 0, 0, 0, 0xFF, 0xFF ]
 
         # 24 pips (18 bytes)
         for i in range(6):
@@ -97,7 +155,6 @@ def mode_tesco_transmit():
     regset = [
         [ REG_RXBW,             RF_RXBW_EXP_1 | RF_RXBW_DCCFREQ_010 ],  # 0x41 channel filter bandwidth 120kHz  page:26
         [ REG_SYNCCONFIG,       RF_SYNC_OFF ],
-
         [ REG_PACKETCONFIG1,    RF_PACKET1_FORMAT_VARIABLE | RF_PACKET1_DCFREE_OFF ],
         [ REG_PAYLOADLENGTH,    66 ],
         [ REG_FIFOTHRESH,       RF_FIFOTHRESH_TXSTART_FIFONOTEMPTY ]
@@ -118,8 +175,28 @@ def mode_tesco_transmit():
 
 def mode_tesco_receive():
     regset = [
+        [ REG_AFCCTRL,          0x0 ],                                  # standard AFC routine
+        [ REG_LNA,              RF_LNA_ZIN_50 ],
+        [ REG_RXBW,             RF_RXBW_EXP_1 | RF_RXBW_DCCFREQ_010 ],  # 0x41 channel filter bandwidth 120kHz  page:26
+
+        [ REG_OOKPEAK,          0x41 ],
+        [ REG_OOKFIX,           0x06 ],
+
+        [ REG_SYNCCONFIG,       RF_SYNC_ON | RF_SYNC_SIZE_8 ],
+        [ REG_SYNCVALUE1,       0xc0 ],
+        [ REG_SYNCVALUE2,       0x00 ],
+        [ REG_SYNCVALUE3,       0x00 ],
+        [ REG_SYNCVALUE4,       0x00 ],
+        [ REG_SYNCVALUE5,       0x00 ],
+        [ REG_SYNCVALUE6,       0x00 ],
+        [ REG_SYNCVALUE7,       0xff ],
+        [ REG_SYNCVALUE8,       0xff ],
+
+        [ REG_PACKETCONFIG1,    RF_PACKET1_FORMAT_FIXED | RF_PACKET1_DCFREE_OFF ],
+        [ REG_PAYLOADLENGTH,    50 ]             # fixed length, 12 bytes
     ]
 
+    rfm69.write_registers(regset)
     rfm69.set_modulation(RF_DATAMODUL_MODULATIONTYPE_OOK)
     rfm69.set_bitrate(RF_BITRATE_4800)
     rfm69.set_preamble(0)
@@ -140,39 +217,3 @@ def transmit_payload(data, repeats=REPEATS):
             # wait for Packet sent
             rfm69.wait_for(REG_IRQFLAGS2, RF_IRQFLAGS2_PACKETSENT, True);
 
-
-def send_test():
-    mode_tesco_transmit()
-    time.sleep(1)
-
-    dev_id = 0x216B
-
-    pkt = TescoPacket(dev_id, 0x51)
-    transmit_payload(pkt.encode())
-    time.sleep(2)
-
-    pkt.state = 0x50
-    transmit_payload(pkt.encode())
-    time.sleep(2)
-
-    #mode_energenie_receive()
-    time.sleep(1)
-
-
-
-def main():
-    logger.info("Startup up Tesco protcol")
-    rfm69.initialize()
-    #listen_test()
-    send_test()
-    rfm69.shutdown()
-
-
-
-if __name__ == '__main__':
-    try:
-        main()
-
-    except KeyboardInterrupt:
-        rfm69.shutdown()
-        pass
