@@ -44,7 +44,8 @@ def initialize():
 
 
 def shutdown():
-    set_mode_tx()
+    set_mode_sleep()
+    wait_for(REG_IRQFLAGS1, RF_IRQFLAGS1_MODEREADY, True)
     spi.close()
     GPIO.cleanup()
 
@@ -168,8 +169,8 @@ def wait_for(addr, mask, val, timeout=1):
             logger.error('wait for timeout Reg: {:02X} Expected: {:08b} Got: {:08b}'.format(addr, mask, r))
             return False
 
-        time.sleep(0.001)
-        timeout = timeout - 0.001
+        time.sleep(0.01)
+        timeout = timeout - 0.01
 
 
 def green_led(state):
