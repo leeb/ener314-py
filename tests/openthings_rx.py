@@ -9,7 +9,7 @@ if __name__ == '__main__':
 
         while True:
             if rfm69.is_payload_ready():
-                pkt = OpenThingsPacket.decode(rfm69.read_fifo())
+                pkt = openthings.receive_payload()
                 if pkt:
                     print(pkt)
             else:

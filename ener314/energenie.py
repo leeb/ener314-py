@@ -138,4 +138,6 @@ def transmit_payload(data, repeats=REPEATS):
         # wait for Packet sent
         rfm69.wait_for(REG_IRQFLAGS2, RF_IRQFLAGS2_PACKETSENT, True);
 
+    # turn off transmit mode here?
+
 

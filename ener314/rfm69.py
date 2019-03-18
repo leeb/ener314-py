@@ -133,6 +133,9 @@ def set_mode_rx():
 def set_mode_sleep():
     set_mode(RF_OPMODE_SLEEP)
 
+def set_mode_standby():
+    set_mode(RF_OPMODE_STANDBY)
+
 def read_reg(addr):
     return spi.xfer([addr & 0x7F, 0])[1]
 

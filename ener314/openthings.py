@@ -11,7 +11,7 @@ from .registers import *
 from .openthings_params import *
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.WARNING)
 
 ch = logging.StreamHandler()
 ch.setFormatter(logging.Formatter('%(asctime)s %(name)-12s %(levelname)-8s %(message)s', '%H:%M:%S'))
@@ -26,117 +26,21 @@ PRODUCT_ADAPTER_PLUS = 0x02
 
 
 class OpenThingsPacket(object):
-    def __init__(self, sensor_id=0, state=0):
-        self.sensor_id = sensor_id
-        self.state = state
-        self.join = False
+    def __init__(self, seed=None, crc=None, **kwargs):
 
+        self.join = True if kwargs.get('join', False) else False
+        self.sensor_id = kwargs.get('sensor_id', None)
+        self.seed = seed
+        self.crc = crc
 
     def __str__(self):
-        r = "Size: {}\n".format(self.size)
-        r = r + "Manufacturer ID: {}\n".format(self.manufacturer_id)
-        r = r + "Product ID: {}\n".format(self.product_id)
-        r = r + "Seed: {:04X}\n".format(self.seed)
-        r = r + "Sensor: {:06X}\n".format(self.sensor_id)
-
-        if hasattr(self, 'state'):
-            r = r + "Switch state: {}\n".format('On' if self.state else 'Off')
-
-        if hasattr(self, 'voltage'):
-            r = r + "Voltage: {:d}\n".format(self.voltage)
-
-        if hasattr(self, 'real_power'):
-            r = r + "Real power: {:d}\n".format(self.real_power)
-
-        if hasattr(self, 'reactive_power'):
-            r = r + "Reactive power: {:d}\n".format(self.reactive_power)
-
-        if hasattr(self, 'frequency'):
-            r = r + "Frequency: {}\n".format(self.frequency)
-
+        # r = "Size: {}\n".format(self.size)
+        r = "Manufacturer ID: {}\n".format(self.manufacturer_id) + \
+            "Product ID: {}\n".format(self.product_id) + \
+            "Seed: {:04X}\n".format(self.seed) + \
+            "Sensor: {:06X}\n".format(self.sensor_id) + \
+            "Join: {}\n".format(self.join)
         return r
-
-    @classmethod
-    def decode(cls, data):
-        if len(data) < OPENTHINGS_HEADER_SIZE:
-            return None
-
-        pkt = None
-        manufacturer_id = data[1]
-        product_id = data[2]
-        size = data[0] + 1
-        seed = data[3] << 8 | data[4]
-
-        # length check
-        if len(data) != size:
-            return False
-
-        cls.crypt(data, seed)
-
-        crc = (data[size - 2] << 8) | data[size - 1]
-        if cls.crc(data, size - 2) != crc:
-            logger.warning('Bad crc {} {:04X}'.format(size, crc))
-            return False
-
-        if manufacturer_id == MANUFACTURER_MIHOME:
-            if product_id == PRODUCT_MONITOR:
-                return False
-            elif product_id == PRODUCT_ADAPTER_PLUS:
-                pkt = MiHomeAdapterPlusPacket()
-            else:
-                return False
-
-            pkt.size = size
-            #pkt.manufacturer_id = manufacturer_id
-            #pkt.product_id = product_id
-            pkt.seed = seed
-            pkt.crc = crc
-            pkt.sensor_id = data[5] << 16 | data[6] << 8 | data[7]
-
-            # logger.info('packet received - {}'.format(data))
-            # logger.info('crc {:04X} {:02X} {:02X}'.format(crc, data[len(data) - 2], data[len(data) - 1]))
-            i = 8
-            while i < size:
-                param = data[i]
-
-                if param == 0:
-                    # test crc
-                    if crc != (data[i + 1] << 8) + data[i + 2]:
-                        raise BadPacketException("CRC does not match header {:04X} {:02X} {:02X}".format(crc, data[i], data[i + 1]))
-                    break
-
-                d_type = data[i + 1] >> 4
-                d_size = data[i + 1] & 0x0f
-                i += 2
-
-                if param == OPENTHINGS_REAL_POWER:
-                    if d_type == 8 and d_size == 2:
-                        pkt.real_power = (data[i] << 8) + data[i + 1]
-
-                elif param == OPENTHINGS_REACTIVE_POWER:
-                    if d_type == 8 and d_size == 2:
-                        pkt.reactive_power = (data[i] << 8) + data[i + 1]
-
-                elif param == OPENTHINGS_VOLTAGE:
-                    if d_type == 0 and d_size == 1:
-                        pkt.voltage = data[i]
-
-                elif param == OPENTHINGS_FREQUENCY:
-                    if d_type == 2 and d_size == 2:
-                        pkt.frequency = data[i] + (data[i + 1] / 256)
-
-                elif param == OPENTHINGS_SWITCH_STATE:
-                    pkt.state = data[i]
-
-                elif param == OPENTHINGS_JOIN:
-                    pkt.join = True
-
-                i += d_size
-
-            return pkt
-
-        return False
-
 
     def encode(self, payload):
         seed = random.randint(0, 65535)
@@ -197,7 +101,6 @@ class OpenThingsPacket(object):
         #logger.info('encrypt = {:02X} {:02X} {:02X}'.format(data[5], data[6], data[7]))
 
         for i in range(5, len(data)):
-
             for r in range(5):
                 seed = ((seed >> 1) ^ 62965) if (seed & 1) else (seed >> 1)
             data[i] = (seed ^ data[i] ^ 90) & 0xff
@@ -215,23 +118,46 @@ class OpenThingsPacket(object):
 
 
 class MiHomeMonitorPacket(OpenThingsPacket):
-    def __init__(self):
+    def __init__(self, **kwargs):
         self.manufacturer_id = MANUFACTURER_MIHOME
         self.product_id = PRODUCT_MONITOR
-        super(MiHomeMonitorPacket, self).__init__()
+        super(MiHomeMonitorPacket, self).__init__(**kwargs)
+
+        self.real_power = kwargs.get('real_power', 0)
+        self.reactive_power = kwargs.get('reactive_power', 0)
+        self.voltage = kwargs.get('voltage', 230)
+        self.frequency = kwargs.get('frequency', 50.0)
 
     def __str__(self):
-        return "MiHome Power Monitor\n" + super(MiHomeMonitorPacket, self).__str__()
+        r = "MiHome Power Monitor\n" + super(MiHomeMonitorPacket, self).__str__()
+        r = r + "Voltage: {:d}\n".format(self.voltage)
+        r = r + "Real power: {:d}\n".format(self.real_power)
+        r = r + "Reactive power: {:d}\n".format(self.reactive_power)
+        r = r + "Frequency: {}\n".format(self.frequency)
+        return r
+
 
 
 class MiHomeAdapterPlusPacket(OpenThingsPacket):
-    def __init__(self):
+    def __init__(self, **kwargs):
         self.manufacturer_id = MANUFACTURER_MIHOME
         self.product_id = PRODUCT_ADAPTER_PLUS
-        super(MiHomeAdapterPlusPacket, self).__init__()
+        super(MiHomeAdapterPlusPacket, self).__init__(**kwargs)
+
+        self.state = kwargs.get('state', None)
+        self.real_power = kwargs.get('real_power', 0)
+        self.reactive_power = kwargs.get('reactive_power', 0)
+        self.voltage = kwargs.get('voltage', 230)
+        self.frequency = kwargs.get('frequency', 50)
 
     def __str__(self):
-        return "MiHome Adapter Plus\n" + super(MiHomeAdapterPlusPacket, self).__str__()
+        r = "MiHome Adapter Plus\n" + super(MiHomeAdapterPlusPacket, self).__str__()
+        r = r + "Switch state: {}\n".format('On' if self.state else 'Off')
+        r = r + "Voltage: {:d}\n".format(self.voltage)
+        r = r + "Real power: {:d}\n".format(self.real_power)
+        r = r + "Reactive power: {:d}\n".format(self.reactive_power)
+        r = r + "Frequency: {}\n".format(self.frequency)
+        return r
 
 
 
@@ -291,6 +217,85 @@ def mode_openthings_receive():
 
     rfm69.wait_for(REG_IRQFLAGS1, RF_IRQFLAGS1_MODEREADY, True)
     logger.info('RFM69 Ready')
+
+
+
+
+def decode_payload(data):
+    if len(data) < OPENTHINGS_HEADER_SIZE:
+        return None
+
+    pkt_size = data[0] + 1
+    manufacturer_id = data[1]
+    product_id = data[2]
+    seed = data[3] << 8 | data[4]
+
+    logger.info("== Packet Bytes:{} manufacturer:{} product:{}".format(pkt_size, manufacturer_id, product_id))
+
+    # length check
+    if len(data) != pkt_size:
+        return None
+
+    OpenThingsPacket.crypt(data, seed)
+    crc = (data[pkt_size - 2] << 8) | data[pkt_size - 1]
+
+    if OpenThingsPacket.crc(data, pkt_size - 2) != crc:
+        logger.warning('Bad crc {} {:04X}'.format(pkt_size, crc))
+        return None
+
+    kwargs = {
+        'size': pkt_size,
+        'sensor_id': data[5] << 16 | data[6] << 8 | data[7]
+    }
+
+    i = 8
+    while i < pkt_size:
+        param = data[i]
+
+        if param == 0:  # crc already
+            break
+
+        d_type = data[i + 1] >> 4
+        d_size = data[i + 1] & 0x0f
+        i += 2
+
+        if param == OPENTHINGS_REAL_POWER:
+            if d_type == 8 and d_size == 2:
+                kwargs['real_power'] = (data[i] << 8) + data[i + 1]
+
+        elif param == OPENTHINGS_REACTIVE_POWER:
+            if d_type == 8 and d_size == 2:
+                kwargs['reactive_power'] = (data[i] << 8) + data[i + 1]
+
+        elif param == OPENTHINGS_VOLTAGE:
+            if d_type == 0 and d_size == 1:
+                kwargs['voltage'] = data[i]
+
+        elif param == OPENTHINGS_FREQUENCY:
+            if d_type == 2 and d_size == 2:
+                kwargs['frequency'] = float(data[i]) + (float(data[i + 1]) / 256)
+
+        elif param == OPENTHINGS_SWITCH_STATE:
+            kwargs['state'] = data[i]
+
+        elif param == OPENTHINGS_JOIN:
+            self.join = True
+
+        i += d_size
+
+    if manufacturer_id == MANUFACTURER_MIHOME:
+        if product_id == PRODUCT_MONITOR:
+            return MiHomeMonitorPacket(seed=seed, crc=crc, **kwargs)
+        elif product_id == PRODUCT_ADAPTER_PLUS:
+            return MiHomeAdapterPlusPacket(seed=seed, crc=crc, **kwargs)
+        else:
+            return None
+
+    return None
+
+
+def receive_payload():
+    return decode_payload(rfm69.read_fifo())
 
 
 def transmit_payload(data):
