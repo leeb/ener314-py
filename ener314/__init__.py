@@ -18,10 +18,6 @@
 #
 from . import rfm69
 from . import energenie
-from .energenie import EnergeniePacket
 from . import openthings
-from .openthings import OpenThingsPacket
 from . import rftech
-from .rftech import RftechPacket
 from . import tesco
-from .tesco import TescoPacket

@@ -3,14 +3,12 @@ from ener314 import *
 if __name__ == '__main__':
     try:
         rfm69.initialize()
-        energenie.mode_energenie_receive()
+        energenie.mode_receive()
         print("Listening for legacy Energenie OOK modulated packets")
 
         while True:
             if rfm69.is_payload_ready():
-                dat = rfm69.read_fifo()
-                #logger.info('Packet arrived {}'.format(dat))
-                pkt = EnergeniePacket.decode(dat)
+                pkt = energenie.receive_payload()
                 if pkt:
                     print(pkt)
 

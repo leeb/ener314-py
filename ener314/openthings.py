@@ -11,13 +11,12 @@ from .registers import *
 from .openthings_params import *
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.WARNING)
+logger.setLevel(logging.INFO)
 
 ch = logging.StreamHandler()
 ch.setFormatter(logging.Formatter('%(asctime)s %(name)-12s %(levelname)-8s %(message)s', '%H:%M:%S'))
 logger.addHandler(ch)
 
-RF_AFCCTRL_STANDARD = 0
 
 MANUFACTURER_MIHOME  = 0x04
 
@@ -162,14 +161,10 @@ class MiHomeAdapterPlusPacket(OpenThingsPacket):
 
 
 
-def mode_openthings_transmit():
+def mode_transmit():
     regset = [
         #[ REG_AFCFEI,           RF_AFCFEI_AFCAUTO_ON ],                # AFC is performed each time rx mode is entered
         #[ REG_RSSITHRESH,       0xDC ],                                # RSSI threshold 0xE4 -> 0xDC (220)
-
-        [ REG_SYNCCONFIG,       RF_SYNC_ON | RF_SYNC_SIZE_2 ],      # Size of the Synch word = 2 (SyncSize + 1)
-        [ REG_SYNCVALUE1,       0x2D ],                             # 1st byte of Sync word
-        [ REG_SYNCVALUE2,       0xD4 ],                             # 2nd byte of Sync word
 
         # Variable length, Manchester coding, Addr must match NodeAddress
         [ REG_PACKETCONFIG1,    RF_PACKET1_FORMAT_VARIABLE | RF_PACKET1_DCFREE_MANCHESTER ],
@@ -177,6 +172,7 @@ def mode_openthings_transmit():
     ]
 
     rfm69.write_registers(regset)
+    rfm69.set_sync(RF_SYNC_ON | RF_SYNC_SIZE_2, [0x2D,0xD4])
     rfm69.set_modulation(RF_DATAMODUL_MODULATIONTYPE_FSK)
     rfm69.set_power(RF_PALEVEL_PA0_ON | RF_PALEVEL_OUTPUTPOWER_11111)
     rfm69.set_bitrate(RF_BITRATE_4800)
@@ -189,25 +185,22 @@ def mode_openthings_transmit():
     logger.info('RFM69 Ready')
 
 
-def mode_openthings_receive():
+def mode_receive():
     regset = [
-        [ REG_AFCCTRL,          RF_AFCCTRL_STANDARD ],                  # standard AFC routine
+        [ REG_AFCCTRL,          0x00 ],                                 # standard AFC routine
         [ REG_LNA,              RF_LNA_ZIN_50 ],                        # 200ohms, gain by AGC loop -> 50ohms
         [ REG_RXBW,             RF_RXBW_EXP_3 | RF_RXBW_DCCFREQ_010 ],  # 0x43 channel filter bandwidth 10kHz -> 60kHz  page:26
 
         #[ REG_AFCFEI,           RF_AFCFEI_AFCAUTO_ON ],                # AFC is performed each time rx mode is entered
         #[ REG_RSSITHRESH,       0xDC ],                                # RSSI threshold 0xE4 -> 0xDC (220)
 
-        [ REG_SYNCCONFIG,       RF_SYNC_ON | RF_SYNC_SIZE_2 ],      # Size of the Synch word = 2 (SyncSize + 1)
-        [ REG_SYNCVALUE1,       0x2D ],                             # 1st byte of Sync word
-        [ REG_SYNCVALUE2,       0xD4 ],                             # 2nd byte of Sync word
-
         # Variable length, Manchester coding, Addr must match NodeAddress
-        [ REG_PACKETCONFIG1,    RF_PACKET1_FORMAT_VARIABLE | RF_PACKET1_DCFREE_MANCHESTER ],
-        [ REG_PAYLOADLENGTH,    RF_PAYLOADLENGTH_VALUE ],             # max Length in RX, not used in Tx
+        [ REG_PACKETCONFIG1,    RF_PACKET1_FORMAT_VARIABLE | RF_PACKET1_DCFREE_MANCHESTER ]
     ]
 
     rfm69.write_registers(regset)
+    rfm69.set_payload_length(RF_PAYLOADLENGTH_VALUE)
+    rfm69.set_sync(RF_SYNC_ON | RF_SYNC_SIZE_2, [0x2D,0xD4])
     rfm69.set_modulation(RF_DATAMODUL_MODULATIONTYPE_FSK)
     rfm69.set_bitrate(RF_BITRATE_4800)
     rfm69.set_preamble(3)
@@ -261,11 +254,13 @@ def decode_payload(data):
 
         if param == OPENTHINGS_REAL_POWER:
             if d_type == 8 and d_size == 2:
-                kwargs['real_power'] = (data[i] << 8) + data[i + 1]
+                v = (data[i] << 8) + data[i + 1]
+                kwargs['real_power'] = v - 65536 if v & 0x8000 else v
 
         elif param == OPENTHINGS_REACTIVE_POWER:
             if d_type == 8 and d_size == 2:
-                kwargs['reactive_power'] = (data[i] << 8) + data[i + 1]
+                v = (data[i] << 8) + data[i + 1]
+                kwargs['reactive_power'] = v - 65536 if v & 0x8000 else v
 
         elif param == OPENTHINGS_VOLTAGE:
             if d_type == 0 and d_size == 1:

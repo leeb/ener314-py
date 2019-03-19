@@ -90,12 +90,12 @@ def reset_rfm():
     GPIO.output(GPIO_RESET, GPIO.HIGH);
     green_led(True)
     red_led(True)
-    time.sleep(0.1)
+    time.sleep(0.150)
 
     GPIO.output(GPIO_RESET, GPIO.LOW);
     green_led(False)
     red_led(False)
-    time.sleep(0.1)
+    time.sleep(0.100)
 
 
 def set_modulation(data):
@@ -118,11 +118,32 @@ def set_frequency(freq):
     write_reg(REG_FRFMID, freq >> 8 & 0xff)
     write_reg(REG_FRFLSB, freq & 0xff)
 
+def set_payload_length(length=66):
+    write_reg(REG_PAYLOADLENGTH, length)
+
+def set_fifo_threshold(value=0x8f):
+    write_reg(REG_FIFOTHRESH, value)
+
+def set_packet_config(config1=None, config2=None):
+    if config1 is not None:
+        write_reg(REG_PACKETCONFIG1, config1)
+    if config2 is not None:
+        write_reg(REG_PACKETCONFIG2, config2)
+
+def set_sync(cfg, values=None):
+    write_reg(REG_SYNCCONFIG, cfg)
+    if values is not None:
+        for i in range(len(values)):
+            write_reg(REG_SYNCVALUE1 + i, values[i])
+
 def set_power(pwr):
     write_reg(REG_PALEVEL, pwr)
 
 def set_mode(mode):
     write_reg(REG_OPMODE, mode)
+
+def set_automode(automode):
+    write_reg(REG_AUTOMODES, automode)
 
 def set_mode_tx():
     set_mode(RF_OPMODE_TRANSMITTER)
@@ -163,31 +184,24 @@ def is_payload_ready():
 
 
 def wait_for(addr, mask, val, timeout=1):
-    while 1:
+    while timeout >= 0:
         r = read_reg(addr)
         if ((r & mask) == (mask if val else 0)):
+            #logger.info('wait for {:02x} {}'.format(mask, timeout))
             return True
-
-        if timeout < 0:
-            logger.error('wait for timeout Reg: {:02X} Expected: {:08b} Got: {:08b}'.format(addr, mask, r))
-            return False
 
         time.sleep(0.01)
         timeout = timeout - 0.01
 
+    logger.error('wait for timeout Reg: {:02X} Expected: {:08b} Got: {:08b}'.format(addr, mask, r))
+    return False
+
 
 def green_led(state):
-    if state:
-        GPIO.output(GPIO_GRN_LED, GPIO.HIGH)
-    else:
-        GPIO.output(GPIO_GRN_LED, GPIO.LOW)
+    GPIO.output(GPIO_GRN_LED, GPIO.HIGH if state else GPIO.LOW)
 
 def red_led(state):
-    if state:
-        GPIO.output(GPIO_RED_LED, GPIO.HIGH)
-    else:
-        GPIO.output(GPIO_RED_LED, GPIO.LOW)
-
+    GPIO.output(GPIO_RED_LED, GPIO.HIGH if state else GPIO.LOW)
 
 
 def main():

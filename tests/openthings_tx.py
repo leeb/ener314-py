@@ -8,7 +8,7 @@ if __name__ == '__main__':
 
     try:
         rfm69.initialize()
-        openthings.mode_openthings_transmit()
+        openthings.mode_transmit()
 
         pkt = OpenThingsPacket()
         pkt.manufacturer_id = 4

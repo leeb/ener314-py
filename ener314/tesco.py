@@ -154,14 +154,14 @@ class TescoPacket(object):
 def mode_tesco_transmit():
     regset = [
         [ REG_RXBW,             RF_RXBW_EXP_1 | RF_RXBW_DCCFREQ_010 ],  # 0x41 channel filter bandwidth 120kHz  page:26
-        [ REG_SYNCCONFIG,       RF_SYNC_OFF ],
         [ REG_PACKETCONFIG1,    RF_PACKET1_FORMAT_VARIABLE | RF_PACKET1_DCFREE_OFF ],
-        [ REG_PAYLOADLENGTH,    66 ],
         [ REG_FIFOTHRESH,       RF_FIFOTHRESH_TXSTART_FIFONOTEMPTY ]
     ]
     logger.info('RFM69 Mode:Tesco TX')
 
     rfm69.write_registers(regset)
+    rfm69.set_payload_length(66)
+    rfm69.set_sync(RF_SYNC_OFF)
     rfm69.set_modulation(RF_DATAMODUL_MODULATIONTYPE_OOK)
     rfm69.set_bitrate(RF_BITRATE_4800)
     rfm69.set_preamble(3)
@@ -175,28 +175,19 @@ def mode_tesco_transmit():
 
 def mode_tesco_receive():
     regset = [
-        [ REG_AFCCTRL,          0x0 ],                                  # standard AFC routine
+        [ REG_AFCCTRL,          0x00 ],                                 # standard AFC routine
         [ REG_LNA,              RF_LNA_ZIN_50 ],
         [ REG_RXBW,             RF_RXBW_EXP_1 | RF_RXBW_DCCFREQ_010 ],  # 0x41 channel filter bandwidth 120kHz  page:26
 
         [ REG_OOKPEAK,          0x41 ],
         [ REG_OOKFIX,           0x06 ],
 
-        [ REG_SYNCCONFIG,       RF_SYNC_ON | RF_SYNC_SIZE_8 ],
-        [ REG_SYNCVALUE1,       0xc0 ],
-        [ REG_SYNCVALUE2,       0x00 ],
-        [ REG_SYNCVALUE3,       0x00 ],
-        [ REG_SYNCVALUE4,       0x00 ],
-        [ REG_SYNCVALUE5,       0x00 ],
-        [ REG_SYNCVALUE6,       0x00 ],
-        [ REG_SYNCVALUE7,       0xff ],
-        [ REG_SYNCVALUE8,       0xff ],
-
-        [ REG_PACKETCONFIG1,    RF_PACKET1_FORMAT_FIXED | RF_PACKET1_DCFREE_OFF ],
-        [ REG_PAYLOADLENGTH,    50 ]             # fixed length, 12 bytes
+        [ REG_PACKETCONFIG1,    RF_PACKET1_FORMAT_FIXED | RF_PACKET1_DCFREE_OFF ]
     ]
 
     rfm69.write_registers(regset)
+    rfm69.set_payload_length(50)
+    rfm69.set_sync(RF_SYNC_ON | RF_SYNC_SIZE_8, [0xc0,0x00,0x00,0x00,0x00,0x00,0xff,0xff])
     rfm69.set_modulation(RF_DATAMODUL_MODULATIONTYPE_OOK)
     rfm69.set_bitrate(RF_BITRATE_4800)
     rfm69.set_preamble(0)
