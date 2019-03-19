@@ -25,12 +25,12 @@ PRODUCT_ADAPTER_PLUS = 0x02
 
 
 class OpenThingsPacket(object):
-    def __init__(self, seed=None, crc=None, **kwargs):
-
-        self.join = True if kwargs.get('join', False) else False
-        self.sensor_id = kwargs.get('sensor_id', None)
+    def __init__(self, manufacturer_id, product_id, sensor_id, seed=None, **kwargs):
+        self.manufacturer_id = manufacturer_id
+        self.product_id = product_id
+        self.sensor_id = sensor_id
         self.seed = seed
-        self.crc = crc
+        self.join = True if kwargs.get('join', False) else False
 
     def __str__(self):
         # r = "Size: {}\n".format(self.size)
@@ -43,7 +43,6 @@ class OpenThingsPacket(object):
 
     def encode(self, payload):
         seed = random.randint(0, 65535)
-
         data = []
 
         # build 8 byte header
@@ -71,19 +70,17 @@ class OpenThingsPacket(object):
         # adjust length
         data[0] = len(data) - 1
 
-        logger.info("payload data {}".format(data))
+        r = ["{:02x}".format(x) for x in data]
+        logger.info("payload data {}".format(r))
 
         # encrypt data
         self.crypt(data, seed)
-        logger.info("encrypt data {}".format(data))
-
+        #logger.info("encrypt data {}".format(data))
         return data
 
-
-    @classmethod
-    def crc(cls, data, size):
+    @staticmethod
+    def crc(data, size):
         val = 0
-
         for i in range(5, size):
             val = val ^ (data[i] << 8)
 
@@ -91,36 +88,37 @@ class OpenThingsPacket(object):
                 val = ((val << 1) ^ 0x1021) if (val & (1 << 15)) else  (val << 1);
                 val &= 0xffff
                 # logger.info('crc calc {} {} {:02X}'.format(i, r, val))
-
         return val
 
-    @classmethod
-    def crypt(cls, data, seed):
+    @staticmethod
+    def crypt(data, seed):
         seed = (242 << 8) ^ seed;
         #logger.info('encrypt = {:02X} {:02X} {:02X}'.format(data[5], data[6], data[7]))
-
         for i in range(5, len(data)):
             for r in range(5):
                 seed = ((seed >> 1) ^ 62965) if (seed & 1) else (seed >> 1)
             data[i] = (seed ^ data[i] ^ 90) & 0xff
 
 
+class MiHomeSetSwitchState(OpenThingsPacket):
+    def __init__(self, product_id, sensor_id, switch_state=False, **kwargs):
+        super(MiHomeSetSwitchState, self).__init__(
+            MANUFACTURER_MIHOME, product_id, sensor_id, **kwargs)
+        self.switch_state = switch_state
 
-    def set_switch_state(self, state):
+    def encode(self):
         data = [
             0x80 | OPENTHINGS_SWITCH_STATE,
             1,
-            0 if state else 1
+            0 if self.switch_state else 1
         ]
-        return data
+        return super(MiHomeSetSwitchState, self).encode(data)
 
 
-
-class MiHomeMonitorPacket(OpenThingsPacket):
-    def __init__(self, **kwargs):
-        self.manufacturer_id = MANUFACTURER_MIHOME
-        self.product_id = PRODUCT_MONITOR
-        super(MiHomeMonitorPacket, self).__init__(**kwargs)
+class MiHomeMonitor(OpenThingsPacket):
+    def __init__(self, sensor_id, **kwargs):
+        super(MiHomeMonitor, self).__init__(
+            MANUFACTURER_MIHOME, PRODUCT_MONITOR, sensor_id, **kwargs)
 
         self.real_power = kwargs.get('real_power', 0)
         self.reactive_power = kwargs.get('reactive_power', 0)
@@ -128,7 +126,7 @@ class MiHomeMonitorPacket(OpenThingsPacket):
         self.frequency = kwargs.get('frequency', 50.0)
 
     def __str__(self):
-        r = "MiHome Power Monitor\n" + super(MiHomeMonitorPacket, self).__str__()
+        r = "MiHome Power Monitor\n" + super(MiHomeMonitor, self).__str__()
         r = r + "Voltage: {:d}\n".format(self.voltage)
         r = r + "Real power: {:d}\n".format(self.real_power)
         r = r + "Reactive power: {:d}\n".format(self.reactive_power)
@@ -136,22 +134,20 @@ class MiHomeMonitorPacket(OpenThingsPacket):
         return r
 
 
+class MiHomeAdapterPlus(OpenThingsPacket):
+    def __init__(self, sensor_id, **kwargs):
+        super(MiHomeAdapterPlus, self).__init__(
+            MANUFACTURER_MIHOME, PRODUCT_ADAPTER_PLUS, sensor_id, **kwargs)
 
-class MiHomeAdapterPlusPacket(OpenThingsPacket):
-    def __init__(self, **kwargs):
-        self.manufacturer_id = MANUFACTURER_MIHOME
-        self.product_id = PRODUCT_ADAPTER_PLUS
-        super(MiHomeAdapterPlusPacket, self).__init__(**kwargs)
-
-        self.state = kwargs.get('state', None)
+        self.switch_state = kwargs.get('switch_state', None)
         self.real_power = kwargs.get('real_power', 0)
         self.reactive_power = kwargs.get('reactive_power', 0)
         self.voltage = kwargs.get('voltage', 230)
         self.frequency = kwargs.get('frequency', 50)
 
     def __str__(self):
-        r = "MiHome Adapter Plus\n" + super(MiHomeAdapterPlusPacket, self).__str__()
-        r = r + "Switch state: {}\n".format('On' if self.state else 'Off')
+        r = "MiHome Adapter Plus\n" + super(MiHomeAdapterPlus, self).__str__()
+        r = r + "Switch state: {}\n".format('On' if self.switch_state else 'Off')
         r = r + "Voltage: {:d}\n".format(self.voltage)
         r = r + "Real power: {:d}\n".format(self.real_power)
         r = r + "Reactive power: {:d}\n".format(self.reactive_power)
@@ -159,59 +155,47 @@ class MiHomeAdapterPlusPacket(OpenThingsPacket):
         return r
 
 
-
-
 def mode_transmit():
-    regset = [
-        #[ REG_AFCFEI,           RF_AFCFEI_AFCAUTO_ON ],                # AFC is performed each time rx mode is entered
-        #[ REG_RSSITHRESH,       0xDC ],                                # RSSI threshold 0xE4 -> 0xDC (220)
+    rfm69.set_mode_standby()
 
-        # Variable length, Manchester coding, Addr must match NodeAddress
-        [ REG_PACKETCONFIG1,    RF_PACKET1_FORMAT_VARIABLE | RF_PACKET1_DCFREE_MANCHESTER ],
-        [ REG_FIFOTHRESH,       RF_FIFOTHRESH_TXSTART_FIFONOTEMPTY ]        # Condition to start packet transmission: at least one byte in FIFO
-    ]
-
-    rfm69.write_registers(regset)
-    rfm69.set_sync(RF_SYNC_ON | RF_SYNC_SIZE_2, [0x2D,0xD4])
     rfm69.set_modulation(RF_DATAMODUL_MODULATIONTYPE_FSK)
-    rfm69.set_power(RF_PALEVEL_PA0_ON | RF_PALEVEL_OUTPUTPOWER_11111)
-    rfm69.set_bitrate(RF_BITRATE_4800)
-    rfm69.set_preamble(3)
     rfm69.set_frequency_deviation(RF_FDEV_5000)
     rfm69.set_frequency(0x6C9333)       # 434.3mhz
-    rfm69.set_mode_tx()
+    rfm69.set_power(RF_PALEVEL_PA0_ON | RF_PALEVEL_OUTPUTPOWER_11111)
+
+    rfm69.set_bitrate(RF_BITRATE_4800)
+    rfm69.set_preamble(3)
+    rfm69.set_sync(RF_SYNC_ON | RF_SYNC_SIZE_2, [0x2D,0xD4])
+
+    rfm69.set_packet_config(RF_PACKET1_FORMAT_VARIABLE | RF_PACKET1_DCFREE_MANCHESTER)
+    rfm69.set_fifo_threshold(RF_FIFOTHRESH_TXSTART_FIFONOTEMPTY)
+    rfm69.set_automode(RF_AUTOMODES_ENTER_FIFONOTEMPTY | RF_AUTOMODES_EXIT_PACKETSENT | RF_AUTOMODES_INTERMEDIATE_TRANSMITTER)
 
     rfm69.wait_for(REG_IRQFLAGS1, RF_IRQFLAGS1_MODEREADY, True)
     logger.info('RFM69 Ready')
 
 
 def mode_receive():
-    regset = [
-        [ REG_AFCCTRL,          0x00 ],                                 # standard AFC routine
-        [ REG_LNA,              RF_LNA_ZIN_50 ],                        # 200ohms, gain by AGC loop -> 50ohms
-        [ REG_RXBW,             RF_RXBW_EXP_3 | RF_RXBW_DCCFREQ_010 ],  # 0x43 channel filter bandwidth 10kHz -> 60kHz  page:26
+    rfm69.set_mode_rx()
 
-        #[ REG_AFCFEI,           RF_AFCFEI_AFCAUTO_ON ],                # AFC is performed each time rx mode is entered
-        #[ REG_RSSITHRESH,       0xDC ],                                # RSSI threshold 0xE4 -> 0xDC (220)
-
-        # Variable length, Manchester coding, Addr must match NodeAddress
-        [ REG_PACKETCONFIG1,    RF_PACKET1_FORMAT_VARIABLE | RF_PACKET1_DCFREE_MANCHESTER ]
-    ]
-
-    rfm69.write_registers(regset)
-    rfm69.set_payload_length(RF_PAYLOADLENGTH_VALUE)
-    rfm69.set_sync(RF_SYNC_ON | RF_SYNC_SIZE_2, [0x2D,0xD4])
     rfm69.set_modulation(RF_DATAMODUL_MODULATIONTYPE_FSK)
-    rfm69.set_bitrate(RF_BITRATE_4800)
-    rfm69.set_preamble(3)
     rfm69.set_frequency_deviation(RF_FDEV_5000)
     rfm69.set_frequency(0x6C9333)       # 434.3mhz
-    rfm69.set_mode_rx()
+
+    rfm69.write_reg(REG_AFCCTRL, 0x00)
+    rfm69.write_reg(REG_LNA, RF_LNA_ZIN_50)
+    rfm69.write_reg(REG_RXBW, RF_RXBW_EXP_3 | RF_RXBW_DCCFREQ_010)
+
+    rfm69.set_bitrate(RF_BITRATE_4800)
+    rfm69.set_preamble(3)
+    rfm69.set_sync(RF_SYNC_ON | RF_SYNC_SIZE_2, [0x2D,0xD4])
+
+    rfm69.set_packet_config(RF_PACKET1_FORMAT_VARIABLE | RF_PACKET1_DCFREE_MANCHESTER)
+    rfm69.set_payload_length(RF_PAYLOADLENGTH_VALUE)
+    rfm69.set_automode(RF_AUTOMODES_ENTER_OFF | RF_AUTOMODES_EXIT_OFF)
 
     rfm69.wait_for(REG_IRQFLAGS1, RF_IRQFLAGS1_MODEREADY, True)
     logger.info('RFM69 Ready')
-
-
 
 
 def decode_payload(data):
@@ -236,10 +220,8 @@ def decode_payload(data):
         logger.warning('Bad crc {} {:04X}'.format(pkt_size, crc))
         return None
 
-    kwargs = {
-        'size': pkt_size,
-        'sensor_id': data[5] << 16 | data[6] << 8 | data[7]
-    }
+    kwargs = { 'size': pkt_size }
+    sensor_id = data[5] << 16 | data[6] << 8 | data[7]
 
     i = 8
     while i < pkt_size:
@@ -271,7 +253,7 @@ def decode_payload(data):
                 kwargs['frequency'] = float(data[i]) + (float(data[i + 1]) / 256)
 
         elif param == OPENTHINGS_SWITCH_STATE:
-            kwargs['state'] = data[i]
+            kwargs['switch_state'] = data[i]
 
         elif param == OPENTHINGS_JOIN:
             self.join = True
@@ -280,9 +262,9 @@ def decode_payload(data):
 
     if manufacturer_id == MANUFACTURER_MIHOME:
         if product_id == PRODUCT_MONITOR:
-            return MiHomeMonitorPacket(seed=seed, crc=crc, **kwargs)
+            return MiHomeMonitor(sensor_id, seed=seed, crc=crc, **kwargs)
         elif product_id == PRODUCT_ADAPTER_PLUS:
-            return MiHomeAdapterPlusPacket(seed=seed, crc=crc, **kwargs)
+            return MiHomeAdapterPlus(sensor_id, seed=seed, crc=crc, **kwargs)
         else:
             return None
 
@@ -294,9 +276,11 @@ def receive_payload():
 
 
 def transmit_payload(data):
-    if rfm69.wait_for(REG_IRQFLAGS1, RF_IRQFLAGS1_MODEREADY | RF_IRQFLAGS1_TXREADY, True):
-        if rfm69.wait_for(REG_IRQFLAGS2, RF_IRQFLAGS2_FIFONOTEMPTY, False):
-            rfm69.write_fifo(data)
+    if rfm69.wait_for(REG_IRQFLAGS2, RF_IRQFLAGS2_FIFONOTEMPTY, False):
+        rfm69.write_fifo(data)
 
-            # wait for packet send?
+    rfm69.wait_for(REG_IRQFLAGS1, RF_IRQFLAGS1_AUTOMODE, False)
+    #if rfm69.wait_for(REG_IRQFLAGS1, RF_IRQFLAGS1_MODEREADY | RF_IRQFLAGS1_TXREADY, True):
+
+        # wait for packet send?
 

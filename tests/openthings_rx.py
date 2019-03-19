@@ -4,7 +4,7 @@ from ener314 import *
 if __name__ == '__main__':
     try:
         rfm69.initialize()
-        openthings.mode_openthings_receive()
+        openthings.mode_receive()
         print("Listening for OpenThings FSK modulated packets")
 
         while True:

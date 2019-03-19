@@ -2,7 +2,9 @@ import time
 from ener314 import *
 
 if __name__ == '__main__':
-    sensor_id = 0x00072E
+    #sensor_id = 0x00072E    # heater
+    #sensor_id = 0x00143e    # desk heater
+    sensor_id = 0x0017d0
 
     print("Sending On/Off signal to OpenThings device: 0x{:05X}".format(sensor_id))
 
@@ -10,17 +12,13 @@ if __name__ == '__main__':
         rfm69.initialize()
         openthings.mode_transmit()
 
-        pkt = OpenThingsPacket()
-        pkt.manufacturer_id = 4
-        pkt.product_id = 2
-        pkt.sensor_id = sensor_id
+        pkt = openthings.MiHomeSetSwitchState(openthings.PRODUCT_ADAPTER_PLUS, sensor_id, True)
 
-        # For switch state, 0 = on, 1 = off
-        openthings.transmit_payload(pkt.encode(pkt.set_switch_state(0)))
-        time.sleep(2)
+        for n in range(4):
+            pkt.switch_state = True if n & 1 else False
+            openthings.transmit_payload(pkt.encode())
+            time.sleep(2)
 
-        openthings.transmit_payload(pkt.encode(pkt.set_switch_state(1)))
-        time.sleep(2)
 
 
     except KeyboardInterrupt:
