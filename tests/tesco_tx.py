@@ -8,15 +8,18 @@ if __name__ == '__main__':
 
     try:
         rfm69.initialize()
-        tesco.mode_tesco_transmit()
+        tesco.mode_transmit()
 
-        pkt = TescoPacket(device_id, 0x51)
-        tesco.transmit_payload(pkt.encode())
-        time.sleep(2)
+        for i in range(2):
+            print("on")
+            pkt = tesco.TescoPacket(device_id, 0x51)
+            tesco.transmit_payload(pkt.encode())
+            time.sleep(2)
 
-        pkt = TescoPacket(device_id, 0x50)
-        tesco.transmit_payload(pkt.encode())
-        time.sleep(2)
+            print("off")
+            pkt = tesco.TescoPacket(device_id, 0x50)
+            tesco.transmit_payload(pkt.encode())
+            time.sleep(2)
 
     except KeyboardInterrupt:
         pass

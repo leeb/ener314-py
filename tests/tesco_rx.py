@@ -3,14 +3,12 @@ from ener314 import *
 if __name__ == '__main__':
     try:
         rfm69.initialize()
-        tesco.mode_tesco_receive()
+        tesco.mode_receive()
         print("Listening for Tesco OOK modulated packets")
 
         while True:
             if rfm69.is_payload_ready():
-                print("payload ready")
-                dat = rfm69.read_fifo()
-                pkt = TescoPacket.decode(dat)
+                pkt = tesco.receive_payload()
                 if pkt:
                     print(pkt)
 

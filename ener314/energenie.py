@@ -48,7 +48,6 @@ class EnergeniePacket(object):
         return data
 
 
-
 def mode_transmit():
     rfm69.set_mode_standby()
 
@@ -97,7 +96,6 @@ def mode_receive():
     logger.info('RFM69 Ready')
 
 
-
 def decode_payload(data):
     if len(data) != 12:
         return None
@@ -140,5 +138,4 @@ def transmit_payload(data, repeats=REPEATS):
         # print('flags   {:08b} {:08b}'.format(rfm69.read_reg(REG_IRQFLAGS2), rfm69.read_reg(REG_IRQFLAGS1)))
     #        if rfm69.wait_for(REG_IRQFLAGS2, RF_IRQFLAGS2_FIFONOTEMPTY, False):
                 #rfm69.wait_for(REG_IRQFLAGS2, RF_IRQFLAGS2_FIFOLEVEL, False);
-
 

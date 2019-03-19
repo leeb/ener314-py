@@ -291,9 +291,8 @@ def receive_payload():
 def transmit_payload(data):
     if rfm69.wait_for(REG_IRQFLAGS2, RF_IRQFLAGS2_FIFONOTEMPTY, False):
         rfm69.write_fifo(data)
+        rfm69.wait_for(REG_IRQFLAGS1, RF_IRQFLAGS1_AUTOMODE, False)
 
-    rfm69.wait_for(REG_IRQFLAGS1, RF_IRQFLAGS1_AUTOMODE, False)
     #if rfm69.wait_for(REG_IRQFLAGS1, RF_IRQFLAGS1_MODEREADY | RF_IRQFLAGS1_TXREADY, True):
-
         # wait for packet send?
 
