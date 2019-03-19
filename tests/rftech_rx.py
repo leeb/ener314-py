@@ -6,12 +6,12 @@ from ener314 import *
 if __name__ == '__main__':
     try:
         rfm69.initialize()
-        rftech.mode_rftech_receive()
+        rftech.mode_receive()
         print("Listening for temperature packets")
 
         while True:
             if rfm69.is_payload_ready():
-                pkt = RftechPacket.decode(rfm69.read_fifo())
+                pkt = rftech.receive_payload()
                 if pkt:
                     print(pkt)
             else:

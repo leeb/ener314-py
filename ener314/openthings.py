@@ -145,6 +145,19 @@ class MiHomeAdapterPlus(OpenThingsPacket):
         self.voltage = kwargs.get('voltage', 230)
         self.frequency = kwargs.get('frequency', 50)
 
+    def encode(self):
+        ''' Some scaffolding to show how this library could
+            enode fake data to impersonate an adapter.
+        '''
+        data = [
+            OPENTHINGS_REAL_POWER, 0x82, 0, 0,      # real power
+            OPENTHINGS_REACTIVE_POWER, 0x82, 0, 0,  # reactive power
+            OPENTHINGS_VOLTAGE, 0x01, 240,          # voltage
+            OPENTHINGS_FREQUENCY, 0x22, 50, 0,      # frequency
+            OPENTHINGS_SWITCH_STATE, 0x01, 1 if self.switch_state else 0
+        ]
+        return super(MiHomeAdapterPlus, self).encode(data)
+
     def __str__(self):
         r = "MiHome Adapter Plus\n" + super(MiHomeAdapterPlus, self).__str__()
         r = r + "Switch state: {}\n".format('On' if self.switch_state else 'Off')
